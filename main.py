@@ -5,6 +5,7 @@ import re
 from pprint import pprint
 
 import playwright
+from IPython.core.release import author
 
 from utils.user_agent import get_playwright, get_soup
 
@@ -72,7 +73,7 @@ async def get_with_auth(page, name_playlist):
     with open(f"{name_playlist}.m3u", "w", encoding="utf-8") as file:
         file.write("#EXTM3U\n")
 
-        for block in blocks:
+        for index, block in enumerate(blocks):
             artist_content = await block.query_selector('a[title][color="white"]')
             artist = await artist_content.inner_text()
             print(artist)
@@ -98,7 +99,7 @@ async def get_with_auth(page, name_playlist):
                 print(f'{index} --- Error --- :\n{data}')
 
 
-async def get_without_auth(page):
+async def get_without_auth(url, page, name_playlist):
     print('Name Author')
     n = 0
     while True:
@@ -146,10 +147,19 @@ async def get_without_auth(page):
                 print(f'{index} --- Error --- :\n{data}')
 
 async def get_soup_without_auth(url):
+    artist = url.split('@')[-1]
+
     soup = await get_soup(url)
     script_content = str(soup)
 
-    script_content = script_content.replace("\\", "")
+    script_content = (script_content
+                      .replace("\\", "")
+                      .replace('false', '""')
+                      .replace('true', '""')
+                      .replace('null', '""')
+                      .replace(r'of "', 'of \\')
+                      .replace(' "', '\\')
+                      .replace('\\,', '",'))
     print(script_content)
 
     # Используем регулярные выражения для поиска всех JSON объектов
@@ -159,6 +169,9 @@ async def get_soup_without_auth(url):
     #json_strings = re.findall(pattern, script_content)
     pattern = r"'clip':\s*{[^}]*?}\s*'relative_index':\d+}"
     pattern = r'"clip":\s*\{[^}]*?\}\s*"relative_index":\d+}'
+
+    pattern = r'{"clip":(.*?)"relative_index":\d+}'
+    pattern = r'({"clip":.*?"relative_index":\d+})'
     json_strings = re.findall(pattern, script_content, re.DOTALL)
     print(len(json_strings))
 
@@ -166,14 +179,16 @@ async def get_soup_without_auth(url):
     json_objects = []
 
     # Парсим каждый JSON и добавляем в список
-    for json_str in json_strings:
-        print(json_str)
-        input('OK!')
+    for idx, json_str in enumerate(json_strings):
+        #print(json_str)
 
         if 'audio_url' in json_str:
-            print(json_str)
-            parsed_json = eval(json_str)
-            input(parsed_json)
+            print(idx)
+
+            parsed_json = json.loads(json_str)
+            json_objects.append(parsed_json)
+            pprint(parsed_json)
+            input()
 
         #
         #
@@ -188,10 +203,16 @@ async def get_soup_without_auth(url):
 
     # Пример вывода ID и URL из каждого словаря
     for obj in json_objects:
-        clip_data = obj.get('clip', {})
-        print("ID:", clip_data.get('id'))
-        print("Video URL:", clip_data.get('video_url'))
-        print("Tags:", clip_data.get('metadata', {}).get('tags'))
+        artist = obj['clip'][['display_name']
+        tool_time = int(obj['clip']['metadata']['duration'])
+        title = onj['clip'][['title']
+        link = obj['clip']['audio_url']
+        data = f'#EXTINF:{tool_time},{artist} - {title}\n{link}\n'
+
+        try:
+            file.write(data)
+        except:
+            print(f'{index} --- Error --- :\n{data}')
 
 
 
